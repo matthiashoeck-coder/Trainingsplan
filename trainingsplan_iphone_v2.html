@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f8">
+<title>Trainingsplan</title>
+<style>
+:root{--bg:#f5f6f7;--card:#fff;--ink:#18202a;--muted:#68727e;--line:#e3e7eb;--accent:#2459c4;--soft:#eaf0ff;--good:#177245}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:760px;margin:auto;padding:env(safe-area-inset-top) 16px calc(30px + env(safe-area-inset-bottom))}
+header{padding:22px 2px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}h1{font-size:27px;letter-spacing:-.7px;margin:0}h2{font-size:18px;margin:0 0 12px}p{color:var(--muted);line-height:1.45}
+.tabs{display:flex;background:#e9ecef;padding:4px;border-radius:14px;gap:4px;margin-bottom:16px}.tabs button{flex:1;border:0;background:transparent;padding:11px;border-radius:11px;font-weight:600;color:var(--muted)}.tabs button.active{background:white;color:var(--ink);box-shadow:0 1px 3px #0001}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 8px #15203305}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.sub{font-size:13px;color:var(--muted)}.weeknav{display:flex;align-items:center;gap:10px}.weeknav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;font-size:18px}
+button,.btn{cursor:pointer}button.primary{background:var(--accent);color:white;border:0;border-radius:12px;padding:12px 15px;font-weight:650}button.secondary{background:white;border:1px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink);font-weight:600}button.danger{color:#b42318;border:1px solid #f0d6d3;background:#fff}
+.day{font-weight:700;font-size:14px;color:#46505c;margin:18px 0 8px}.session{border:1px solid var(--line);border-radius:14px;padding:13px;margin:8px 0;background:white}.session.done{border-color:#b8dfca;background:#f4fbf7}.session.done .name{text-decoration:line-through;color:#65776b}
+.name{font-weight:700}.details{font-size:13px;color:var(--muted);margin-top:5px;line-height:1.4}.check{width:23px;height:23px;accent-color:var(--good)}
+label{display:block;font-size:13px;font-weight:650;color:#505b68;margin:12px 0 6px}input,select,textarea{font:inherit;width:100%;border:1px solid #d9dee4;border-radius:11px;background:#fff;padding:11px 12px;color:var(--ink)}textarea{min-height:90px;resize:vertical}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.empty{padding:18px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:14px}
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#f7f8fa;border-radius:12px;padding:12px}.stat strong{display:block;font-size:22px}.stat span{font-size:12px;color:var(--muted)}
+.zone{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}.zone:last-child{border:0}
+small.note{display:block;color:var(--muted);line-height:1.4;margin-top:10px}
+@media(min-width:600px){main{padding-top:24px}.grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body><main>
+<header><div><div class="sub">DEIN TRAININGSALLTAG</div><h1>Trainingsplan</h1></div><button class="secondary" id="settingsBtn">Einstellungen</button></header>
+<div class="tabs"><button class="active" data-tab="plan">Wochenplan</button><button data-tab="edit">Bearbeiten</button><button data-tab="stats">Übersicht</button></div>
+<section id="plan"></section><section id="edit" hidden></section><section id="stats" hidden></section>
+</main>
+<script>
+const DAYS=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+const SPORTS=["Krafttraining","Radfahren","Indoorfahren","Laufen","Schwimmen","Tennis","Ruhetag (Dehnen, Core, Fußübungen)","Sonstiges"];
+const ZONES=["REKOM (TB-1)","GA-1 (TB-2)","GA-1-2 (TB-3)","GA-2 (TB-4)","WSA (TB-5)","Grundlagen 130–140 bpm","LT1 – 134 bpm","LT2 – 178 bpm","Keine Zone"];
+const TYPES=["Locker","Intervall","Technik","Dauertraining","Kraft","Regeneration"];
+const ZONETEXT=["< 126 bpm","126–144 bpm","145–164 bpm","165–173 bpm","> 174 bpm","130–140 bpm","134 bpm","178 bpm","—"];
+const KEY="trainingsplan_local_v1";
+let data=load(),week=0,editingId=null;
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{start:new Date().toISOString().slice(0,10),sessions:[],notes:{},profile:{}}}catch{return{start:new Date().toISOString().slice(0,10),sessions:[],notes:{},profile:{}}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function weekDate(n){let d=new Date(data.start+"T12:00:00");d.setDate(d.getDate()+n*7);return d}
+function dateStr(d){return d.toLocaleDateString("de-AT",{day:"2-digit",month:"2-digit",year:"numeric"})}
+function weekLabel(n){let a=weekDate(n),b=new Date(a);b.setDate(b.getDate()+6);return `${dateStr(a)} – ${dateStr(b)}`}
+function sid(){return Math.random().toString(36).slice(2,10)}
+function sessionsForWeek(n){return data.sessions.filter(s=>s.week===n).sort((a,b)=>a.day-b.day)}
+function render(){
+ document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",!document.getElementById(b.dataset.tab).hidden));
+ renderPlan();renderEdit();renderStats();
+}
+function renderPlan(){
+ let all=sessionsForWeek(week),done=all.filter(s=>s.done).length;
+ let html=`<div class="card"><div class="row"><div><div class="sub">DEIN 10-WOCHEN-PLAN</div><h2>Woche ${week+1} von 10</h2></div><div class="weeknav"><button id="prev">‹</button><button id="next">›</button></div></div><p>${weekLabel(week)}</p><div class="statgrid"><div class="stat"><strong>${done}/${all.length}</strong><span>erledigt</span></div><div class="stat"><strong>${all.length-done}</strong><span>offen</span></div><div class="stat"><strong>${all.length?Math.round(done/all.length*100):0}%</strong><span>Wochenfortschritt</span></div></div></div>`;
+ DAYS.forEach((day,i)=>{let list=all.filter(s=>s.day===i);html+=`<div class="day">${day}</div>`;if(!list.length){html+=`<div class="sub">Keine Einheit geplant</div>`}list.forEach(s=>html+=`<article class="session ${s.done?"done":""}"><div class="row"><div><div class="name">${esc(s.sport)}</div><div class="details">${esc(s.zone)} · ${esc(s.type)}${s.duration?` · ${esc(s.duration)} min`:""}</div>${s.note?`<div class="details">${esc(s.note)}</div>`:""}${s.strength?`<div class="details"><strong>Athletic Plan:</strong><br>${esc(s.strength).replace(/\n/g,"<br>")}</div>`:""}</div><input class="check" type="checkbox" aria-label="Erledigt" data-done="${s.id}" ${s.done?"checked":""}></div></article>`)});
+ html+=`<div class="card"><h2>Notizen für Woche ${week+1}</h2><textarea id="weeknote" placeholder="Probleme, Beschwerden, Belastung oder Hinweise für nächste Woche…">${esc(data.notes[week]||"")}</textarea><small class="note">Wird automatisch lokal gespeichert.</small></div>`;
+ document.getElementById("plan").innerHTML=html;
+ document.getElementById("prev").onclick=()=>{week=Math.max(0,week-1);render()};
+ document.getElementById("next").onclick=()=>{week=Math.min(9,week+1);render()};
+ document.querySelectorAll("[data-done]").forEach(c=>c.onchange=()=>{let s=data.sessions.find(x=>x.id===c.dataset.done);if(s)s.done=c.checked;save();renderPlan();renderStats()});
+ document.getElementById("weeknote").oninput=e=>{data.notes[week]=e.target.value;save()};
+}
+function renderEdit(){
+ let s=data.sessions.find(x=>x.id===editingId)||{day:0,sport:SPORTS[0],zone:ZONES[1],type:TYPES[0],duration:"",note:"",week};
+ const opts=(arr,val)=>arr.map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("");
+ document.getElementById("edit").innerHTML=`<div class="card"><h2>${editingId?"Einheit bearbeiten":"Einheit hinzufügen"}</h2><div class="grid">
+ <div><label>Planwoche</label><select id="fweek">${Array.from({length:10},(_,i)=>`<option value="${i}" ${i===s.week?"selected":""}>Woche ${i+1}</option>`).join("")}</select></div>
+ <div><label>Wochentag</label><select id="fday">${DAYS.map((x,i)=>`<option value="${i}" ${i===s.day?"selected":""}>${x}</option>`).join("")}</select></div>
+ <div><label>Sportart</label><select id="fsport">${opts(SPORTS,s.sport)}</select></div>
+ <div><label>Trainingsbereich</label><select id="fzone">${opts(ZONES,s.zone)}</select><div class="sub" id="zonehelp"></div></div>
+ <div><label>Einheitentyp</label><select id="ftype">${opts(TYPES,s.type)}</select></div>
+ <div><label>Dauer (Minuten, optional)</label><input id="fduration" type="number" min="0" inputmode="numeric" value="${esc(s.duration)}" placeholder="z. B. 45"></div>
+ <div class="full"><label>Notiz zur Einheit (optional)</label><input id="fnote" value="${esc(s.note)}" placeholder="z. B. 4 × 5 min, Pause 2 min"></div>
+ <div class="full" id="strengthWrap" ${s.sport==="Krafttraining"?"":"hidden"}><label>Athletic Plan – Krafttraining</label><textarea id="fstrength" placeholder="Übungen, Sätze, Wiederholungen, Gewichte, Tempo oder Hinweise…">${esc(s.strength||"")}</textarea></div></div>
+ <div class="actions"><button class="primary" id="saveSession">Speichern</button><button class="secondary" id="cancelEdit">Abbrechen</button>${editingId?'<button class="secondary danger" id="deleteSession">Löschen</button>':""}</div></div>
+ <div class="card"><h2>Herzfrequenzbereiche</h2>${ZONES.slice(0,5).map((z,i)=>`<div class="zone"><span>${esc(z)}</span><strong>${ZONETEXT[i]}</strong></div>`).join("")}<small class="note">Aus deinen Unterlagen übernommen. Die gerundeten Bereiche sind Orientierung; gemessene Schwellen: LT1 134 bpm, LT2 178 bpm. Fahrrad-Testwerte können beim Laufen abweichen.</small></div>
+ <div class="card"><h2>10-Wochen-Plan</h2><label>Startdatum</label><input type="date" id="startdate" value="${esc(data.start)}"><small class="note">Ändert die Datumsanzeige für alle Planwochen.</small></div>`;
+ document.getElementById("zonehelp").textContent=ZONETEXT[ZONES.indexOf(s.zone)]||"";
+ document.getElementById("fsport").onchange=e=>{document.getElementById("strengthWrap").hidden=e.target.value!=="Krafttraining"};
+ document.getElementById("fzone").onchange=e=>document.getElementById("zonehelp").textContent=ZONETEXT[ZONES.indexOf(e.target.value)]||"";
+ document.getElementById("saveSession").onclick=()=>{let obj={id:editingId||sid(),week:+document.getElementById("fweek").value,day:+document.getElementById("fday").value,sport:document.getElementById("fsport").value,zone:document.getElementById("fzone").value,type:document.getElementById("ftype").value,duration:document.getElementById("fduration").value,note:document.getElementById("fnote").value,strength:document.getElementById("fstrength")?.value||"",done:s?.done||false};if(editingId)data.sessions=data.sessions.map(x=>x.id===editingId?obj:x);else data.sessions.push(obj);week=obj.week;editingId=null;save();render();};
+ document.getElementById("cancelEdit").onclick=()=>{editingId=null;renderEdit()};
+ if(editingId)document.getElementById("deleteSession").onclick=()=>{if(confirm("Einheit wirklich löschen?")){data.sessions=data.sessions.filter(x=>x.id!==editingId);editingId=null;save();render()}};
+ document.getElementById("startdate").onchange=e=>{if(e.target.value){data.start=e.target.value;save();renderPlan()}};
+}
+function renderStats(){let done=data.sessions.filter(s=>s.done).length,planned=data.sessions.length;document.getElementById("stats").innerHTML=`<div class="card"><h2>Deine Trainingsübersicht</h2><div class="statgrid"><div class="stat"><strong>${done}</strong><span>absolviert</span></div><div class="stat"><strong>${planned-done}</strong><span>geplant/offen</span></div><div class="stat"><strong>${planned?Math.round(done/planned*100):0}%</strong><span>Gesamtfortschritt</span></div></div></div><div class="card"><h2>Einheiten nach Woche</h2>${Array.from({length:10},(_,i)=>{let a=sessionsForWeek(i),d=a.filter(s=>s.done).length;return `<div class="zone"><span>Woche ${i+1}</span><strong>${d}/${a.length}</strong></div>`}).join("")}</div><div class="card"><button class="secondary" id="export">Daten als JSON exportieren</button> <button class="secondary danger" id="reset">Alle Daten löschen</button><small class="note">Exportiere gelegentlich eine Sicherung. Die Daten liegen nur in diesem Browser auf diesem Gerät.</small></div>`;
+ document.getElementById("export").onclick=()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="trainingsplan-sicherung.json";a.click();URL.revokeObjectURL(url)};
+ document.getElementById("reset").onclick=()=>{if(confirm("Alle Trainingsdaten endgültig löschen?")){localStorage.removeItem(KEY);data=load();week=0;render()}};
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll("main>section").forEach(s=>s.hidden=true);document.getElementById(b.dataset.tab).hidden=false;document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));});
+document.getElementById("settingsBtn").onclick=()=>{document.querySelector('[data-tab="edit"]').click();document.getElementById("startdate").focus()};
+render();
+</script></body></html>
